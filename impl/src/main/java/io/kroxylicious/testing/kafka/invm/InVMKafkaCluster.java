@@ -129,8 +129,10 @@ public class InVMKafkaCluster implements KafkaCluster, KafkaClusterConfig.KafkaE
     public synchronized void start() {
         // kraft mode: per-broker: 1 external port + 1 inter-broker port + 1 controller port + 1 anon port
         // zk mode: per-cluster: 1 zk port; per-broker: 1 external port + 1 inter-broker port + 1 anon port
-        portsAllocator.allocate(Set.of(Listener.EXTERNAL, Listener.ANON, Listener.INTERNAL), 0, clusterConfig.getBrokersNum());
-        portsAllocator.allocate(Set.of(Listener.CONTROLLER), 0, clusterConfig.isKraftMode() ? clusterConfig.getKraftControllers() : 1);
+        try (PortAllocator.PortAllocationSession portAllocationSession = portsAllocator.allocationSession()) {
+            portAllocationSession.allocate(Set.of(Listener.EXTERNAL, Listener.ANON, Listener.INTERNAL), 0, clusterConfig.getBrokersNum());
+            portAllocationSession.allocate(Set.of(Listener.CONTROLLER), 0, clusterConfig.isKraftMode() ? clusterConfig.getKraftControllers() : 1);
+        }
 
         buildAndStartZookeeper();
         clusterConfig.getBrokerConfigs(() -> this).parallel().forEach(configHolder -> {
@@ -233,7 +235,9 @@ public class InVMKafkaCluster implements KafkaCluster, KafkaClusterConfig.KafkaE
                 "Adding broker with node.id {0} to cluster with existing nodes {1}.", newNodeId, servers.keySet());
 
         // preallocate ports for the new broker
-        portsAllocator.allocate(Set.of(Listener.EXTERNAL, Listener.ANON, Listener.INTERNAL), newNodeId);
+        try (PortAllocator.PortAllocationSession portAllocationSession = portsAllocator.allocationSession()) {
+            portAllocationSession.allocate(Set.of(Listener.EXTERNAL, Listener.ANON, Listener.INTERNAL), newNodeId);
+        }
 
         var configHolder = clusterConfig.generateConfigForSpecificNode(this, newNodeId);
         final Server server = buildKafkaServer(configHolder);

@@ -6,6 +6,7 @@
 
 package io.kroxylicious.testing.kafka.common;
 
+import java.io.Closeable;
 import java.net.ServerSocket;
 import java.util.HashMap;
 import java.util.List;
@@ -32,23 +33,17 @@ public class PortAllocator {
         return ports.get(listener).get(nodeId).getLocalPort();
     }
 
-    public synchronized void allocate(Set<Listener> listeners, int brokerId) {
-        allocate(listeners, brokerId, brokerId + 1);
-    }
-
-    public synchronized void allocate(Set<Listener> listeners, int firstBrokerIdInclusive, int lastBrokerIdExclusive) {
+    private synchronized void allocate(Set<Listener> listeners, int firstBrokerIdInclusive, int lastBrokerIdExclusive, ListeningSocketPreallocator preallocator) {
         if (lastBrokerIdExclusive <= firstBrokerIdInclusive) {
             throw new IllegalArgumentException(
                     "attempted to allocate ports to an invalid range of broker ids: [" + firstBrokerIdInclusive + "," + lastBrokerIdExclusive + ")");
         }
         int toAllocate = lastBrokerIdExclusive - firstBrokerIdInclusive;
-        try (var preallocator = new ListeningSocketPreallocator()) {
-            for (Listener listener : listeners) {
-                List<ServerSocket> sockets = preallocator.preAllocateListeningSockets(toAllocate);
-                Map<Integer, ServerSocket> listenerPorts = ports.computeIfAbsent(listener, listener1 -> new HashMap<>());
-                for (int i = 0; i < toAllocate; i++) {
-                    listenerPorts.put(firstBrokerIdInclusive + i, sockets.get(i));
-                }
+        for (Listener listener : listeners) {
+            List<ServerSocket> sockets = preallocator.preAllocateListeningSockets(toAllocate);
+            Map<Integer, ServerSocket> listenerPorts = ports.computeIfAbsent(listener, listener1 -> new HashMap<>());
+            for (int i = 0; i < toAllocate; i++) {
+                listenerPorts.put(firstBrokerIdInclusive + i, sockets.get(i));
             }
         }
     }
@@ -58,9 +53,40 @@ public class PortAllocator {
         return portsMap != null && portsMap.containsKey(nodeId);
     }
 
+    /**
+     * Since port pre-allocation is stateful (ensuring all ports assigned during pre-allocation
+     * are unique), we need to keep a reference to that pre-allocator while we are allocating all
+     * the initial ports for a cluster
+     *
+     * @return A session which holds the allocated ports open until it is closed
+     */
+    public PortAllocationSession allocationSession() {
+        return new PortAllocationSession();
+    }
+
     public synchronized void deallocate(int nodeId) {
         for (var value : ports.values()) {
             value.remove(nodeId);
+        }
+    }
+
+    /**
+     * An allocation session where all ports allocated are unique within that session.
+     */
+    public class PortAllocationSession implements Closeable {
+        ListeningSocketPreallocator preallocator = new ListeningSocketPreallocator();
+
+        public void allocate(Set<Listener> listeners, int firstBrokerIdInclusive, int lastBrokerIdExclusive) {
+            PortAllocator.this.allocate(listeners, firstBrokerIdInclusive, lastBrokerIdExclusive, preallocator);
+        }
+
+        public void allocate(Set<Listener> listeners, int brokerId) {
+            PortAllocator.this.allocate(listeners, brokerId, brokerId + 1, preallocator);
+        }
+
+        @Override
+        public void close() {
+            preallocator.close();
         }
     }
 }

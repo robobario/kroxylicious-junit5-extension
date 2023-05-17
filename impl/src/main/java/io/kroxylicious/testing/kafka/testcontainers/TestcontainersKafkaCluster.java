@@ -137,7 +137,9 @@ public class TestcontainersKafkaCluster implements Startable, KafkaCluster, Kafk
                     .withNetworkAliases("zookeeper");
         }
 
-        portsAllocator.allocate(Set.of(Listener.EXTERNAL, Listener.ANON), 0, clusterConfig.getBrokersNum());
+        try (PortAllocator.PortAllocationSession portAllocationSession = portsAllocator.allocationSession()) {
+            portAllocationSession.allocate(Set.of(Listener.EXTERNAL, Listener.ANON), 0, clusterConfig.getBrokersNum());
+        }
 
         clusterConfig.getBrokerConfigs(() -> this).forEach(holder -> brokers.put(holder.getBrokerNum(), buildKafkaContainer(holder)));
     }
@@ -262,7 +264,9 @@ public class TestcontainersKafkaCluster implements Startable, KafkaCluster, Kafk
                 "Adding broker with node.id {0} to cluster with existing nodes {1}.", newNodeId, brokers.keySet());
 
         // preallocate ports for the new broker
-        portsAllocator.allocate(Set.of(Listener.EXTERNAL, Listener.ANON), newNodeId);
+        try (PortAllocator.PortAllocationSession portAllocationSession = portsAllocator.allocationSession()) {
+            portAllocationSession.allocate(Set.of(Listener.EXTERNAL, Listener.ANON), newNodeId);
+        }
 
         var configHolder = clusterConfig.generateConfigForSpecificNode(this, newNodeId);
         var kafkaContainer = buildKafkaContainer(configHolder);
