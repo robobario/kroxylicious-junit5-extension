@@ -106,15 +106,6 @@ public class TestcontainersKafkaCluster implements Startable, KafkaCluster, Kafk
     }
 
     /**
-     * Protected by lock of {@link TestcontainersKafkaCluster itself.}
-     */
-    private final SortedMap<Integer, ServerSocket> clientPorts = new TreeMap<>();
-    /**
-     * Protected by lock of {@link TestcontainersKafkaCluster itself.}
-     */
-    private final SortedMap<Integer, ServerSocket> anonPorts = new TreeMap<>();
-
-    /**
      * Instantiates a new Testcontainers kafka cluster.
      *
      * @param clusterConfig the cluster config
