@@ -5,28 +5,41 @@
  */
 package io.kroxylicious.testing.kafka.junit5ext;
 
+import io.kroxylicious.Condition;
+import io.kroxylicious.testing.kafka.api.KafkaCluster;
+import io.kroxylicious.testing.kafka.common.BrokerCluster;
+import io.kroxylicious.testing.kafka.common.BrokerConfig;
 import org.apache.kafka.clients.admin.Admin;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionConfigurationException;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.testkit.engine.Events;
 
-import io.kroxylicious.testing.kafka.api.KafkaCluster;
-import io.kroxylicious.testing.kafka.common.BrokerCluster;
-import io.kroxylicious.testing.kafka.common.BrokerConfig;
-
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.platform.testkit.engine.EngineTestKit.engine;
-import static org.junit.platform.testkit.engine.EventConditions.event;
-import static org.junit.platform.testkit.engine.EventConditions.finishedWithFailure;
-import static org.junit.platform.testkit.engine.EventConditions.test;
+import static org.junit.platform.testkit.engine.EventConditions.*;
 import static org.junit.platform.testkit.engine.TestExecutionResultConditions.instanceOf;
 import static org.junit.platform.testkit.engine.TestExecutionResultConditions.message;
 
 public class ExceptionalTest {
+
+    @BeforeAll
+    public static void setup() {
+        Condition.setTestInProgress(true);
+    }
+
+    @AfterAll
+    public static void teardown() {
+        Condition.setTestInProgress(false);
+    }
+
     @ExtendWith(KafkaClusterExtension.class)
+    @EnabledIf("io.kroxylicious.Condition#testInProgress")
     static class ImpossibleConstraintCase {
 
         @BrokerCluster(numBrokers = 1)
@@ -64,6 +77,7 @@ public class ExceptionalTest {
     }
 
     @ExtendWith(KafkaClusterExtension.class)
+    @EnabledIf("io.kroxylicious.Condition#testInProgress")
     static class AmbiguousClusterCase {
         // Test that an unknown @KafkaClusterConstraint-annotated annotation
         // is an impossible-to-satisfy constraint
@@ -95,12 +109,13 @@ public class ExceptionalTest {
     }
 
     @ExtendWith(KafkaClusterExtension.class)
+    @EnabledIf("io.kroxylicious.Condition#testInProgress")
     static class RedeclareConfigurationForExistingClusterCase {
         // throw if two clusters declared with same cluster id but different constraints
         @Test
         public void declareConfigurationForClusterATwice(
-                                                         @BrokerCluster(numBrokers = 1) @Name("A") KafkaCluster cluster1,
-                                                         @BrokerCluster(numBrokers = 2) @Name("A") KafkaCluster cluster2) {
+                @BrokerCluster(numBrokers = 1) @Name("A") KafkaCluster cluster1,
+                @BrokerCluster(numBrokers = 2) @Name("A") KafkaCluster cluster2) {
             fail("Test execution shouldn't get this far");
         }
     }
@@ -127,6 +142,7 @@ public class ExceptionalTest {
     }
 
     @ExtendWith(KafkaClusterExtension.class)
+    @EnabledIf("io.kroxylicious.Condition#testInProgress")
     static class ProhibitedBrokerConfigCase {
 
         // Test that the test author cannot mistakenly think they
